@@ -1,0 +1,126 @@
+{
+  "overall_fraud_rate": 0.01,
+  "train_size": 111471,
+  "test_size": 38524,
+  "train_fraud_rate": 0.0101,
+  "test_fraud_rate": 0.0096,
+  "approach_a_class_weighted": {
+    "auc_roc": 0.9777,
+    "auc_pr": 0.7979,
+    "precision": 0.5164,
+    "recall": 0.8081,
+    "f1_score": 0.6301,
+    "accuracy": 0.9909,
+    "confusion_matrix": [
+      [
+        37874,
+        280
+      ],
+      [
+        71,
+        299
+      ]
+    ],
+    "scale_pos_weight": 97.7343
+  },
+  "approach_b_smote": {
+    "auc_roc": 0.975,
+    "auc_pr": 0.7825,
+    "precision": 0.8098,
+    "recall": 0.7135,
+    "f1_score": 0.7586,
+    "accuracy": 0.9956,
+    "confusion_matrix": [
+      [
+        38092,
+        62
+      ],
+      [
+        106,
+        264
+      ]
+    ],
+    "smote_resampled_train_size": 220684
+  },
+  "winner": "class_weighted",
+  "winner_metrics": {
+    "auc_roc": 0.9777,
+    "auc_pr": 0.7979,
+    "precision": 0.5164,
+    "recall": 0.8081,
+    "f1_score": 0.6301,
+    "accuracy": 0.9909,
+    "confusion_matrix": [
+      [
+        37874,
+        280
+      ],
+      [
+        71,
+        299
+      ]
+    ]
+  },
+  "split": "time-based: train < 2025-07-01, test >= 2025-07-01",
+  "robustness_random_split_winner": {
+    "auc_roc": 0.9618,
+    "auc_pr": 0.7865,
+    "precision": 0.3762,
+    "recall": 0.8267,
+    "f1_score": 0.5171,
+    "accuracy": 0.9846,
+    "confusion_matrix": [
+      [
+        36610,
+        514
+      ],
+      [
+        65,
+        310
+      ]
+    ]
+  },
+  "leakage_check_warnings": [],
+  "top_10_features": [
+    {
+      "feature": "is_foreign_transaction",
+      "importance": 0.11160703748464584
+    },
+    {
+      "feature": "is_new_country_for_account",
+      "importance": 0.10357300937175751
+    },
+    {
+      "feature": "minutes_since_last_transaction",
+      "importance": 0.08840744197368622
+    },
+    {
+      "feature": "txn_count_trailing_1hr",
+      "importance": 0.06745874136686325
+    },
+    {
+      "feature": "is_new_category_for_account",
+      "importance": 0.05582712963223457
+    },
+    {
+      "feature": "channel_in-store",
+      "importance": 0.038969967514276505
+    },
+    {
+      "feature": "amount_to_avg_ratio",
+      "importance": 0.035482440143823624
+    },
+    {
+      "feature": "amount_deviation_ratio",
+      "importance": 0.034880708903074265
+    },
+    {
+      "feature": "is_night_hour",
+      "importance": 0.034015316516160965
+    },
+    {
+      "feature": "merchant_category_jewelry",
+      "importance": 0.03271586820483208
+    }
+  ]
+}

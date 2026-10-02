@@ -1,0 +1,26 @@
+version: 2
+
+models:
+  - name: int_account_velocity
+    description: >
+      Per-transaction engineered features: trailing 1hr/24hr transaction
+      counts, distinct merchant categories/countries in trailing 24hr,
+      minutes since last transaction, and deviation of amount from the
+      account's own historical average (computed with no leakage - only
+      prior transactions are used).
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        tests:
+          - not_null
+
+  - name: int_account_summary
+    description: Per-account lifetime aggregate stats.
+    columns:
+      - name: account_id
+        tests:
+          - unique
+          - not_null

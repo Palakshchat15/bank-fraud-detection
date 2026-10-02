@@ -1,0 +1,63 @@
+Bank Transaction Fraud Detection Model - Report
+=======================================================
+
+Total transactions: 149995
+Overall fraud rate: 0.9994%
+Train: 111471 (1.0128% fraud) | Test: 38524 (0.9604% fraud) [time-based split: train Jan-Jun 2025, test Jul-Aug 2025]
+
+Approach A: Class-Weighted XGBoost
+----------------------------------------
+  scale_pos_weight (from actual train ratio): 97.73
+  auc_roc: 0.9777
+  auc_pr: 0.7979
+  precision: 0.5164
+  recall: 0.8081
+  f1_score: 0.6301
+  accuracy: 0.9909
+  confusion_matrix: [[37874, 280], [71, 299]]
+
+Approach B: SMOTE-Resampled XGBoost
+----------------------------------------
+  SMOTE applied to training set only (111471 -> 220684 rows)
+  auc_roc: 0.975
+  auc_pr: 0.7825
+  precision: 0.8098
+  recall: 0.7135
+  f1_score: 0.7586
+  accuracy: 0.9956
+  confusion_matrix: [[38092, 62], [106, 264]]
+
+WINNER (selected by AUC-PR, the primary metric for severe class imbalance): class_weighted
+Justification: with fraud at ~1% of transactions, accuracy is nearly meaningless (predicting 'no fraud' for every transaction already scores ~99% accuracy), so AUC-PR (average precision) - which focuses on the precision/recall tradeoff for the minority (fraud) class - is the more decision-relevant metric. Class-weighting won here: it lets the model learn from the true data distribution and calibrate directly on real minority-class density, whereas SMOTE's synthetic interpolated fraud examples can blur decision boundaries - here the interpolated examples did not improve the ranking of real fraud in the unseen test months.
+
+Robustness check (class_weighted, stratified random 75/25 split instead of time split):
+  auc_roc: 0.9618
+  auc_pr: 0.7865
+  precision: 0.3762
+  recall: 0.8267
+  f1_score: 0.5171
+  accuracy: 0.9846
+  confusion_matrix: [[36610, 514], [65, 310]]
+
+Leakage investigation:
+  No single feature dominates model decisions (top feature 'is_foreign_transaction' = 11.2% of total importance). All features are past-only.
+
+Top 10 feature importances:
+                       feature  importance
+        is_foreign_transaction    0.111607
+    is_new_country_for_account    0.103573
+minutes_since_last_transaction    0.088407
+        txn_count_trailing_1hr    0.067459
+   is_new_category_for_account    0.055827
+              channel_in-store    0.038970
+           amount_to_avg_ratio    0.035482
+        amount_deviation_ratio    0.034881
+                 is_night_hour    0.034015
+     merchant_category_jewelry    0.032716
+
+Confusion matrix [rows=actual, cols=predicted] (0=legit, 1=fraud), winning model:
+[[37874   280]
+ [   71   299]]
+
+Honest discussion:
+Synthetic dataset. An audit found that the first version of the generator leaked the label through the hour of day (hour 5 was 100% fraud; legitimate activity never happened at most night hours) and that the model used lifetime account aggregates computed over all 8 months including the fraud rows. Both were fixed: night-time activity is now a realistic skew, features are past-only, and evaluation is on unseen later months. The generator's signal level was tuned on a validation split inside the training months only. Real-world fraud is adversarial and noisier, so real AUC-PR would typically be lower still. Results are reported exactly as computed.

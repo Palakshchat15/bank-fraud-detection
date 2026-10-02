@@ -1,0 +1,53 @@
+version: 2
+
+models:
+  - name: dim_account
+    description: Account dimension with lifetime aggregate stats.
+    columns:
+      - name: account_id
+        tests:
+          - unique
+          - not_null
+
+  - name: fact_transactions
+    description: Transaction fact table (star schema).
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: account_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_account')
+              field: account_id
+
+  - name: mart_transaction_features
+    description: >
+      ML-ready table: one row per transaction with all engineered velocity/
+      behavioral/amount-deviation features plus the is_fraud label.
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: is_fraud
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: is_new_category_for_account
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: is_new_country_for_account
+        tests:
+          - not_null
+          - accepted_values:
+              values: [0, 1]
+      - name: is_night_hour
+        tests:
+          - accepted_values:
+              values: [0, 1]
