@@ -38,6 +38,11 @@ OUTPUTS:
   outputs/model_report.txt          - human-readable comparison + discussion
   outputs/shap_summary.png          - SHAP global feature importance
   outputs/flagged_transactions.csv  - transaction_id, fraud_probability, top SHAP reasons
+
+Optional MLflow tracking (log_to_mlflow, after all outputs are written; logging only):
+params, every metric in model_metrics.json, the outputs above as artifacts, and the winning
+model registered as 'fraud-xgboost'. Skipped with a warning if MLFLOW_TRACKING_URI is unset
+or the server is unreachable.
 """
 import json
 import os
@@ -419,6 +424,67 @@ def main():
     print(json.dumps(final_metrics, indent=2))
     print(f"\nWrote outputs to {OUTPUTS_DIR}")
 
+    # For the optional MLflow logging below (read-only; nothing above depends on it)
+    return {"model": final_model, "winner": winner, "rows": int(len(df)),
+            "first_txn": str(df["transaction_datetime"].min()),
+            "last_txn": str(df["transaction_datetime"].max())}
+
+
+# ---------- Optional MLflow experiment tracking (logging only) ----------
+EXPERIMENT_NAME = "fraud_detection"
+REGISTERED_MODEL_NAME = "fraud-xgboost"
+RAW_CSV = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                       "data", "raw", "bank_transactions.csv")
+
+
+def log_to_mlflow(run_info):
+    """Runs after main() has written every output: reads them back and logs params, all metrics
+    in model_metrics.json, the report/plot/CSV artifacts and the winning XGBoost model (registered
+    as REGISTERED_MODEL_NAME). Guarded in mlflow_tracking: no server -> a warning, nothing else."""
+    from mlflow_tracking import file_sha256, flatten_metrics, log_run
+
+    model = run_info["model"]
+    with open(os.path.join(OUTPUTS_DIR, "model_metrics.json")) as f:
+        metrics_out = json.load(f)
+    params = {f"xgb_{k}": v for k, v in model.get_params().items() if v is not None}
+    params.update({
+        "winner": run_info["winner"],
+        "split": metrics_out["split"],
+        "test_start": TEST_START,
+        "smote_k_neighbors": 5,
+        "smote_random_state": 42,
+        "robustness_split": "stratified random 75/25, random_state=42",
+        "decision_threshold": 0.5,
+        "n_features": len(model.get_booster().feature_names or []),
+        "numeric_features": ",".join(NUMERIC_FEATURE_COLS),
+        "categorical_features": ",".join(CATEGORICAL_FEATURE_COLS),
+    })
+    raw_sha = file_sha256(RAW_CSV)
+    data_version = (f"warehouse.mart_transaction_features: {run_info['rows']} rows, "
+                    f"{run_info['first_txn']} .. {run_info['last_txn']}; "
+                    f"bank_transactions.csv sha256 {raw_sha[:12] if raw_sha else 'n/a'}")
+
+    def log_model(mlflow):
+        import mlflow.xgboost
+        mlflow.xgboost.log_model(model, artifact_path="model", registered_model_name=REGISTERED_MODEL_NAME,
+                                 pip_requirements=[f"xgboost=={xgb.__version__}"])
+
+    log_run(
+        EXPERIMENT_NAME, run_name=f"xgboost_{run_info['winner']}", params=params,
+        metrics=flatten_metrics(metrics_out),
+        artifacts=[os.path.join(OUTPUTS_DIR, name) for name in (
+            "model_metrics.json", "model_report.txt", "shap_summary.png",
+            "threshold_metrics.csv", "flagged_transactions.csv")],
+        tags={"data_version": data_version, "raw_csv_sha256": raw_sha, "winner": run_info["winner"],
+              "project": "bank_fraud_detection"},
+        log_model=log_model,
+    )
+
 
 if __name__ == "__main__":
-    main()
+    _run_info = main()
+    try:
+        log_to_mlflow(_run_info)
+    except Exception as e:  # tracking must never fail the training task
+        print(f"WARNING [mlflow]: tracking skipped ({type(e).__name__}: {e}); training outputs are unaffected.",
+              flush=True)

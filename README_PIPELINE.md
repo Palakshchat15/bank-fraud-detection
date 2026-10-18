@@ -649,3 +649,39 @@ case. This was still checked, not assumed.
   - `data/processed/dim_account.csv`
     (3,000 data rows + header) — columns:
     `account_id,customer_id,home_country,lifetime_txn_count,lifetime_fraud_count,lifetime_fraud_rate,lifetime_avg_amount,lifetime_stddev_amount,first_transaction_datetime,last_transaction_datetime,lifetime_distinct_categories,lifetime_distinct_countries`
+
+## Experiment tracking (MLflow)
+
+Added 2026-10-17, **run on 2026-10-18** (Docker Desktop, 4 GB cap). Logging only: the model,
+seeds, data and every output above are unchanged.
+
+- **Server:** the `mlflow` service in `docker-compose.yml` (official image
+  `ghcr.io/mlflow/mlflow:v2.16.2`, SQLite metadata and artifacts on the `mlflow_data` volume,
+  one worker, 512 MB cap). UI: http://localhost:5005.
+- **What `train_fraud_model.py` logs** after it has written all its outputs (experiment
+  `fraud_detection`): the XGBoost parameters and split settings; every number in
+  `model_metrics.json` (both approaches, the winner, the random-split check, confusion
+  matrices); `model_metrics.json`, `model_report.txt`, `shap_summary.png`,
+  `threshold_metrics.csv` and `flagged_transactions.csv` as artifacts; the winning model,
+  registered as **`fraud-xgboost`** (one new version per run). Tags: `airflow_run_id` (the DAG
+  run), `data_version` (mart rows, date range, sha256 of `bank_transactions.csv`), `winner`.
+- **Guarded:** if `MLFLOW_TRACKING_URI` is unset or the server does not answer, the task prints
+  `WARNING [mlflow]: ...` and finishes normally.
+
+```bash
+docker compose build                   # adds mlflow 2.16.2 to the Airflow image
+docker compose up -d mlflow            # with the other services as in "How to run"
+curl http://localhost:5005/health      # OK
+docker compose exec airflow-scheduler airflow dags trigger fraud_pipeline_dag
+```
+
+| Check | Result |
+|---|---|
+| DAG run `mlflow_upgrade_20261018_013815` | success: all 9 tasks succeeded (about 2 min) |
+| Run in experiment `fraud_detection`, tagged with the DAG run id | yes: run `xgboost_class_weighted` (FINISHED), tags `airflow_run_id` = `mlflow_upgrade_20261018_013815`, `airflow_task_id` = `train_fraud_model`, `winner` = `class_weighted`, `data_version` (149,995 mart rows, raw CSV sha256 `0955b9e2664f`) |
+| `auc_pr` logged for the winner | yes: `winner_metrics.auc_pr` = 0.7979 (AUC-ROC 0.9777, recall 0.8081), the same as `model_metrics.json`; 22 parameters logged |
+| `fraud-xgboost` version registered | yes: version 1, status READY, source = the run's `model` artifact |
+| Outputs byte-identical to the run before MLflow | yes: all 4 `.csv` / `.json` / `.txt` files in `outputs/` have the same sha256 as the pre-upgrade backup |
+| Peak memory of the `mlflow` container | not measured (the 2026-10-18 run did not record container memory) |
+
+Details, risks and the exact verification steps: `UPGRADE_NOTES.md`.
